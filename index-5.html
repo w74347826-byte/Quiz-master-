@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#5b21b6">
+  <meta name="description" content="Quiz Master — a fun interactive quiz game with science, history, geography and technology questions.">
+  <title>Quiz Master | Learn, Play, Improve</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#" data-page="home" aria-label="Quiz Master home"><span class="brand-mark">✦</span><span>Quiz <b>Master</b></span></a>
+  <nav class="nav" aria-label="Main navigation">
+    <button class="nav-link active" data-page="home">Home</button>
+    <button class="nav-link" data-page="categories">Play</button>
+    <button class="nav-link" data-page="leaderboard">Scores</button>
+    <button class="nav-link" data-page="about">About</button>
+  </nav>
+  <button id="themeToggle" class="icon-button" aria-label="Toggle theme" title="Toggle theme">☾</button>
+</header>
+
+<main class="container">
+  <section id="page-home" class="page">
+    <div class="hero">
+      <div class="hero-copy">
+        <span class="eyebrow"><span class="pulse"></span> LEARN · PLAY · IMPROVE</span>
+        <h1>Your next big<br><span>brain win.</span></h1>
+        <p>Challenge yourself with fun multiple-choice questions across different categories. Learn something new with every answer.</p>
+        <div class="hero-actions">
+          <button class="btn primary" data-page="categories">▶ Start a quiz</button>
+          <button class="btn secondary" data-page="about">Explore features</button>
+        </div>
+        <div class="quick-stats">
+          <div><strong>60+</strong><span>Questions</span></div>
+          <div><strong>4</strong><span>Categories</span></div>
+          <div><strong>🔊</strong><span>Voice mode</span></div>
+        </div>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="art-glow"></div><div class="art-circle">🧠</div>
+        <div class="floating-card card-one">🏆 <span>Keep learning!</span></div>
+        <div class="floating-card card-two">✨ <span>Level up</span></div>
+        <div class="art-base"><span>QUIZ</span><span>MASTER</span></div>
+      </div>
+    </div>
+    <div class="section-heading"><div><span class="eyebrow">WHY QUIZ MASTER?</span><h2>Learning that feels like play</h2></div></div>
+    <div class="feature-grid">
+      <article class="feature-card"><div class="feature-icon purple">◉</div><h3>Instant feedback</h3><p>See the correct answer as soon as you choose.</p></article>
+      <article class="feature-card"><div class="feature-icon pink">♫</div><h3>Voice read-aloud</h3><p>Listen to questions using your browser's speech feature.</p></article>
+      <article class="feature-card"><div class="feature-icon gold">♛</div><h3>Leaderboard</h3><p>Save your scores and see your best results.</p></article>
+      <article class="feature-card"><div class="feature-icon mint">↗</div><h3>Mobile friendly</h3><p>Play comfortably on Android, tablets and computers.</p></article>
+    </div>
+  </section>
+
+  <section id="page-categories" class="page" hidden>
+    <div class="page-heading"><span class="eyebrow">PICK YOUR CHALLENGE</span><h1>Choose a category</h1><p>Each category has 15 multiple-choice questions.</p></div>
+    <div class="voice-panel"><div><strong>🔊 Voice read-aloud</strong><small>Hear questions and answer feedback</small></div><label class="switch"><input type="checkbox" id="voiceToggle"><span></span></label></div>
+    <div id="categoryGrid" class="category-grid"><div class="loading">Loading categories…</div></div>
+  </section>
+
+  <section id="page-quiz" class="page" hidden>
+    <div class="quiz-top"><button class="text-button" id="quitQuiz">← Categories</button><span id="quizCategory" class="pill">Science</span><button class="icon-button voice-read" id="readQuestion" aria-label="Read question aloud">🔊</button></div>
+    <div class="progress-info"><span id="questionCounter">Question 1 of 15</span><span id="progressPercent">7%</span></div>
+    <div class="progress"><span id="progressBar"></span></div>
+    <article class="question-card">
+      <div class="question-symbol" id="questionIcon">🔬</div>
+      <span class="eyebrow">YOUR QUESTION</span>
+      <h2 id="questionText">Loading question…</h2>
+      <div id="options" class="options"></div>
+      <div id="feedback" class="feedback" hidden></div>
+      <button id="nextQuestion" class="btn primary full" disabled>Choose an answer</button>
+    </article>
+    <p class="quiz-tip">💡 Take your time. Every question is a chance to learn.</p>
+  </section>
+
+  <section id="page-results" class="page" hidden>
+    <article class="results-card">
+      <div class="trophy">🏆</div><span class="eyebrow">QUIZ COMPLETED</span><h1 id="resultTitle">Well done!</h1>
+      <p class="muted">Your final score</p><div class="score-display"><span id="scoreNumber">0</span><small id="scoreTotal">/ 15</small></div>
+      <div class="result-track"><span id="scoreBar"></span></div><p id="resultMessage">Great effort!</p>
+      <div class="result-details"><div><span>Category</span><strong id="resultCategory">Science</strong></div><div><span>Accuracy</span><strong id="resultPercent">0%</strong></div></div>
+      <label class="field-label" for="playerName">Save your score to the leaderboard</label><input id="playerName" class="text-input" maxlength="20" placeholder="Enter your name" autocomplete="name">
+      <div id="saveMessage" class="save-message" role="status"></div>
+      <button id="saveScore" class="btn primary full">♛ Save score</button>
+      <button id="playAgain" class="btn secondary full">Play another category</button>
+    </article>
+  </section>
+
+  <section id="page-leaderboard" class="page" hidden>
+    <div class="page-heading"><span class="eyebrow">CELEBRATE YOUR PROGRESS</span><h1>Leaderboard 🏆</h1><p>Scores saved on this website appear here.</p></div>
+    <div class="table-wrap"><table><thead><tr><th>Rank</th><th>Player</th><th>Category</th><th>Score</th><th>Accuracy</th></tr></thead><tbody id="leaderboardBody"><tr><td colspan="5">Loading scores…</td></tr></tbody></table></div>
+    <button class="btn secondary" data-page="categories">Play a quiz →</button>
+  </section>
+
+  <section id="page-about" class="page" hidden>
+    <div class="page-heading"><span class="eyebrow">ABOUT THE PROJECT</span><h1>Small quizzes. Big learning.</h1><p>Quiz Master is an interactive learning game built with a responsive frontend and a Python backend.</p></div>
+    <div class="about-grid">
+      <article class="about-card"><div class="feature-icon purple">🎯</div><h3>How to play</h3><p>Choose a category, answer 15 questions, review instant feedback and save your final score.</p></article>
+      <article class="about-card"><div class="feature-icon pink">🔊</div><h3>Voice mode</h3><p>Turn voice mode on to hear questions and feedback. Voice availability depends on your browser and device.</p></article>
+      <article class="about-card"><div class="feature-icon gold">🐍</div><h3>Python backend</h3><p>Flask provides question and score APIs. Scores are stored in a local JSON file.</p></article>
+      <article class="about-card"><div class="feature-icon mint">💜</div><h3>Built for mobile</h3><p>The layout adapts to small screens, so you can play directly in your Android browser.</p></article>
+    </div>
+    <div class="tech-banner"><span>🐍 Python + Flask</span><span>＋</span><span>🟨 HTML · CSS · JavaScript</span></div>
+  </section>
+</main>
+<footer><a href="#" data-page="home" class="footer-brand">✦ Quiz Master</a><span>Learn something new, one question at a time.</span><button class="text-button" data-page="about">About this project</button></footer>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
