@@ -1,0 +1,340 @@
+'use strict';
+
+const state = {
+  categories: [],
+  categoryIndex: 0,
+  questionIndex: 0,
+  score: 0,
+  questions: [],
+  voice: false,
+  answered: false,
+  saved: false,
+  currentPage: 'home'
+};
+
+const $ = (id) => document.getElementById(id);
+const pageIds = ['home', 'categories', 'quiz', 'results', 'leaderboard', 'about'];
+const pageNames = {
+  home: 'page-home',
+  categories: 'page-categories',
+  quiz: 'page-quiz',
+  results: 'page-results',
+  leaderboard: 'page-leaderboard',
+  about: 'page-about'
+};
+
+function navigate(page) {
+  if (!pageNames[page]) page = 'home';
+  pageIds.forEach(name => {
+    const el = $(pageNames[name]);
+    if (el) el.hidden = name !== page;
+  });
+  document.querySelectorAll('[data-page]').forEach(button => {
+    if (button.classList.contains('nav-link')) {
+      button.classList.toggle('active', button.dataset.page === page ||
+        (page === 'quiz' && button.dataset.page === 'categories') ||
+        (page === 'results' && button.dataset.page === 'categories'));
+    }
+  });
+  state.currentPage = page;
+  if (page !== 'quiz' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+  if (page === 'leaderboard') loadLeaderboard();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+document.addEventListener('click', (event) => {
+  const target = event.target.closest('[data-page]');
+  if (target) {
+    event.preventDefault();
+    navigate(target.dataset.page);
+  }
+});
+
+function speak(text) {
+  if (!state.voice || !('speechSynthesis' in window) || !text) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.94;
+    utterance.pitch = 1;
+    window.speechSynthesis.speak(utterance);
+  } catch (error) {
+    showToast('Voice read-aloud is not available on this device.');
+  }
+}
+
+function questionSpeech(question) {
+  return `${question[0]}. ` + question[1].map((option, index) =>
+    `Option ${'ABCD'[index]}: ${option}.`).join(' ');
+}
+
+function renderCategories() {
+  const grid = $('categoryGrid');
+  grid.replaceChildren();
+  state.categories.forEach((category, index) => {
+    const card = document.createElement('article');
+    card.className = 'category-card';
+    const icon = document.createElement('div');
+    icon.className = 'category-emoji';
+    icon.textContent = category.icon || '✨';
+    const title = document.createElement('h3');
+    title.textContent = category.category;
+    const desc = document.createElement('p');
+    desc.textContent = `${category.questions.length} questions · ${category.description || 'Test your knowledge'}`;
+    const button = document.createElement('button');
+    button.className = 'btn primary';
+    button.type = 'button';
+    button.textContent = 'Play now →';
+    button.addEventListener('click', () => startQuiz(index));
+    card.append(icon, title, desc, button);
+    grid.appendChild(card);
+  });
+}
+
+async function loadQuestions() {
+  try {
+    const response = await fetch('/api/questions');
+    if (!response.ok) throw new Error('Question API unavailable');
+    const data = await response.json();
+    if (!Array.isArray(data) || !data.length) throw new Error('No categories');
+    state.categories = data;
+  } catch (error) {
+    $('categoryGrid').innerHTML = '<div class="loading">Could not load questions. Please run the Python Flask server and refresh.</div>';
+    return;
+  }
+  renderCategories();
+}
+
+function startQuiz(categoryIndex) {
+  const category = state.categories[categoryIndex];
+  if (!category || !Array.isArray(category.questions) || !category.questions.length) {
+    showToast('This category has no questions yet.');
+    return;
+  }
+  state.categoryIndex = categoryIndex;
+  state.questions = [...category.questions].sort(() => Math.random() - 0.5);
+  state.questionIndex = 0;
+  state.score = 0;
+  state.answered = false;
+  state.saved = false;
+  $('saveMessage').textContent = '';
+  $('saveScore').disabled = false;
+  $('saveScore').textContent = '♛ Save score';
+  navigate('quiz');
+  renderQuestion();
+}
+
+function renderQuestion() {
+  const category = state.categories[state.categoryIndex];
+  const question = state.questions[state.questionIndex];
+  if (!question) return finishQuiz();
+
+  const number = state.questionIndex + 1;
+  const total = state.questions.length;
+  const percent = Math.round(number / total * 100);
+  $('quizCategory').textContent = `${category.icon || '✨'} ${category.category}`;
+  $('questionCounter').textContent = `Question ${number} of ${total}`;
+  $('progressPercent').textContent = `${percent}%`;
+  $('progressBar').style.width = `${percent}%`;
+  $('questionIcon').textContent = category.icon || '✨';
+  $('questionText').textContent = question[0];
+  $('feedback').hidden = true;
+  $('feedback').className = 'feedback';
+  $('nextQuestion').disabled = true;
+  $('nextQuestion').textContent = 'Choose an answer';
+  state.answered = false;
+
+  const options = $('options');
+  options.replaceChildren();
+  question[1].forEach((answer, index) => {
+    const button = document.createElement('button');
+    button.className = 'option';
+    button.type = 'button';
+    const letter = document.createElement('span');
+    letter.className = 'option-letter';
+    letter.textContent = 'ABCD'[index];
+    const label = document.createElement('span');
+    label.textContent = answer;
+    button.append(letter, label);
+    button.addEventListener('click', () => chooseAnswer(index));
+    options.appendChild(button);
+  });
+  if (state.voice) speak(questionSpeech(question));
+}
+
+function chooseAnswer(selectedIndex) {
+  if (state.answered) return;
+  const question = state.questions[state.questionIndex];
+  if (!question) return;
+  state.answered = true;
+  const buttons = [...$('options').children];
+  buttons.forEach(button => { button.disabled = true; });
+  const correctIndex = question[2];
+  const feedback = $('feedback');
+
+  if (selectedIndex === correctIndex) {
+    state.score += 1;
+    buttons[selectedIndex].classList.add('correct');
+    feedback.className = 'feedback good';
+    feedback.textContent = '✓ Correct! Great job.';
+    speak('Correct! Great job.');
+  } else {
+    buttons[selectedIndex].classList.add('wrong');
+    buttons[correctIndex].classList.add('correct');
+    feedback.className = 'feedback bad';
+    feedback.textContent = `Not quite. The correct answer is ${question[1][correctIndex]}.`;
+    speak(`Not quite. The correct answer is ${question[1][correctIndex]}.`);
+  }
+  feedback.hidden = false;
+  $('nextQuestion').disabled = false;
+  $('nextQuestion').textContent =
+    state.questionIndex + 1 < state.questions.length ? 'Next question →' : 'View results →';
+}
+
+function nextQuestion() {
+  if (!state.answered) return;
+  if (state.questionIndex + 1 < state.questions.length) {
+    state.questionIndex += 1;
+    renderQuestion();
+  } else {
+    finishQuiz();
+  }
+}
+
+function finishQuiz() {
+  const total = state.questions.length || 1;
+  const percent = Math.round(state.score / total * 100);
+  $('scoreNumber').textContent = state.score;
+  $('scoreTotal').textContent = `/ ${total}`;
+  $('scoreBar').style.width = `${percent}%`;
+  $('resultPercent').textContent = `${percent}%`;
+  $('resultCategory').textContent = state.categories[state.categoryIndex].category;
+  $('resultTitle').textContent = percent >= 80 ? 'Amazing work!' : percent >= 50 ? 'Well done!' : 'Keep practising!';
+  $('resultMessage').textContent = percent >= 80
+    ? 'Outstanding! You are becoming a Quiz Master.'
+    : percent >= 50
+      ? 'Good effort! A little practice will make you even stronger.'
+      : 'Every attempt helps you learn. Try again and beat your score!';
+  $('playerName').value = '';
+  $('saveMessage').textContent = '';
+  $('saveScore').disabled = false;
+  $('saveScore').textContent = '♛ Save score';
+  state.saved = false;
+  navigate('results');
+  speak(`Quiz complete. You scored ${state.score} out of ${total}.`);
+}
+
+async function saveScore() {
+  if (state.saved) return;
+  const name = $('playerName').value.trim() || 'Player';
+  const category = state.categories[state.categoryIndex].category;
+  const result = { name, category, score: state.score, total: state.questions.length };
+
+  $('saveScore').disabled = true;
+  $('saveMessage').textContent = 'Saving score…';
+  try {
+    const response = await fetch('/api/scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(result)
+    });
+    if (!response.ok) throw new Error('Could not save score');
+    state.saved = true;
+    $('saveMessage').textContent = 'Score saved successfully!';
+    $('saveScore').textContent = '✓ Score saved';
+    showToast('Your score is on the leaderboard!');
+    setTimeout(() => navigate('leaderboard'), 650);
+  } catch (error) {
+    $('saveScore').disabled = false;
+    $('saveMessage').textContent = 'Could not connect to the backend. Check that Flask is running.';
+    showToast('Score could not be saved. Please try again.');
+  }
+}
+
+async function loadLeaderboard() {
+  const body = $('leaderboardBody');
+  body.replaceChildren();
+  try {
+    const response = await fetch('/api/scores');
+    if (!response.ok) throw new Error('Scores unavailable');
+    const scores = await response.json();
+    if (!scores.length) {
+      const row = body.insertRow();
+      const cell = row.insertCell();
+      cell.colSpan = 5;
+      cell.textContent = 'No scores yet. Be the first to play!';
+      return;
+    }
+    scores.slice(0, 50).forEach((score, index) => {
+      const row = body.insertRow();
+      const values = [
+        index + 1,
+        score.name,
+        score.category,
+        `${score.score}/${score.total}`,
+        `${Math.round(score.score / score.total * 100)}%`
+      ];
+      values.forEach(value => {
+        const cell = row.insertCell();
+        cell.textContent = String(value);
+      });
+    });
+  } catch (error) {
+    const row = body.insertRow();
+    const cell = row.insertCell();
+    cell.colSpan = 5;
+    cell.textContent = 'Could not load scores. Check the Flask server.';
+  }
+}
+
+function showToast(message) {
+  const toast = $('toast');
+  toast.textContent = message;
+  toast.classList.add('show');
+  window.setTimeout(() => toast.classList.remove('show'), 2600);
+}
+
+$('voiceToggle').addEventListener('change', (event) => {
+  state.voice = event.target.checked;
+  if (!state.voice && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+  if (state.voice) {
+    if ('speechSynthesis' in window) speak('Voice mode is on.');
+    else {
+      state.voice = false;
+      event.target.checked = false;
+      showToast('Voice read-aloud is not supported in this browser.');
+    }
+  }
+});
+$('readQuestion').addEventListener('click', () => {
+  const question = state.questions[state.questionIndex];
+  if (!question) return;
+  if ('speechSynthesis' in window) {
+    const wasVoice = state.voice;
+    state.voice = true;
+    speak(questionSpeech(question));
+    state.voice = wasVoice;
+  } else {
+    showToast('Voice read-aloud is not supported in this browser.');
+  }
+});
+$('nextQuestion').addEventListener('click', nextQuestion);
+$('quitQuiz').addEventListener('click', () => navigate('categories'));
+$('playAgain').addEventListener('click', () => navigate('categories'));
+$('saveScore').addEventListener('click', saveScore);
+$('themeToggle').addEventListener('click', () => {
+  document.body.classList.toggle('dark');
+  const dark = document.body.classList.contains('dark');
+  $('themeToggle').textContent = dark ? '☀' : '☾';
+  $('themeToggle').setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+  try { localStorage.setItem('qm-theme', dark ? 'dark' : 'light'); } catch (_) {}
+});
+
+try {
+  if (localStorage.getItem('qm-theme') === 'dark') {
+    document.body.classList.add('dark');
+    $('themeToggle').textContent = '☀';
+  }
+} catch (_) {}
+
+loadQuestions();
